@@ -28,13 +28,13 @@ import { update_job_status } from "./generic_scheduler";
 
 export const cleanup_unsubmitted_forms = async (job: JobScheduleQueue) => {
   try {
-    // ✅ FIX: Corrected 7-day calculation
+    // FIX: Corrected 7-day calculation
     // Original code forgot to multiply by 1000 (milliseconds),
     // so it was calculating 7 * 24 * 60 * 60 = seconds, not ms.
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
 
-    // ✅ FIX: Removed the "plus one day" calculation
+    // FIX: Removed the "plus one day" calculation
     // The original code created a 24hr window instead of "older than 7 days".
     // We only need "less than or equal to seven days ago".
     const expiredTokens = await prisma.publicFormsTokens.findMany({
@@ -46,7 +46,7 @@ export const cleanup_unsubmitted_forms = async (job: JobScheduleQueue) => {
     });
 
     for (const token of expiredTokens) {
-      // ✅ FIX: Broadened relationship query
+      // FIX: Broadened relationship query
       // Original code only matched "status: new".
       // That would miss entities tied to tokens in other statuses.
       // Depending on business rules, this might need to include more states.
@@ -57,26 +57,39 @@ export const cleanup_unsubmitted_forms = async (job: JobScheduleQueue) => {
       });
 
       if (relationship) {
-        await prisma.$transaction([
+        // FIX: Use transaction to ensure consistency
+        // The original code had transaction but no safeguard for missing entityId.
+        // Added proper null checks to avoid prisma errors.
+        await prisma.$transaction(async (tx) => {
           // Delete relationship
-          prisma.relationship.delete({
+          await tx.relationship.delete({
             where: { id: relationship.id },
-          }),
-          // // Delete the token
-          prisma.publicFormsTokens.delete({
+          });
+
+          // Delete token
+          await tx.publicFormsTokens.delete({
             where: { token: token.token },
-          }),
-          // Delete all corpus items associated with the entity
-          prisma.new_corpus.deleteMany({
-            where: {
-              entity_id: token.entityId || "",
-            },
-          }),
-          // Delete the entity (company)
-          prisma.entity.delete({
-            where: { id: token.entityId || "" },
-          }),
-        ]);
+          });
+
+          // Only attempt entity cleanup if entityId exists
+          if (token.entityId) {
+            // Delete related corpus items
+            await tx.new_corpus.deleteMany({
+              where: { entity_id: token.entityId },
+            });
+
+            // Delete entity itself
+            await tx.entity.delete({
+              where: { id: token.entityId },
+            });
+          }
+        });
+      } else {
+        // FIX: Delete orphaned tokens even if relationship not found
+        // The original code skipped deleting if no relationship existed, leaving stale tokens in DB.
+        await prisma.publicFormsTokens.delete({
+          where: { token: token.token },
+        });
       }
     }
 
