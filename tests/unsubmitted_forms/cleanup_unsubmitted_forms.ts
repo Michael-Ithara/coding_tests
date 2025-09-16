@@ -93,11 +93,11 @@ export const cleanup_unsubmitted_forms = async (job: JobScheduleQueue) => {
       }
     }
 
-    // ✅ FIX: Ensure job status is updated on success
+    // FIX: Ensure job status is updated on success
     await update_job_status(job.id, "completed");
   } catch (error) {
     console.error("Error cleaning up unsubmitted forms:", error);
-    // ✅ FIX: Update job status as failed if error happens
+    // FIX: Update job status as failed if error happens
     await update_job_status(job.id, "failed");
     throw error; // still rethrow so error monitoring catches it
   }
