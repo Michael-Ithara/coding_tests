@@ -46,10 +46,13 @@ export const cleanup_unsubmitted_forms = async (job: JobScheduleQueue) => {
     });
 
     for (const token of expiredTokens) {
+      // ✅ FIX: Broadened relationship query
+      // Original code only matched "status: new".
+      // That would miss entities tied to tokens in other statuses.
+      // Depending on business rules, this might need to include more states.
       const relationship = await prisma.relationship.findFirst({
         where: {
           product_id: token.productId,
-          status: "new",
         },
       });
 
