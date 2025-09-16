@@ -34,11 +34,13 @@ export const cleanup_unsubmitted_forms = async (job: JobScheduleQueue) => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
 
+    // ✅ FIX: Removed the "plus one day" calculation
+    // The original code created a 24hr window instead of "older than 7 days".
+    // We only need "less than or equal to seven days ago".
     const expiredTokens = await prisma.publicFormsTokens.findMany({
       where: {
         createdAt: {
-          gte: sevenDaysAgo, // greater than or equal to 7 days ago
-          lt: sevenDaysAgoPlusOneDay, // but less than 7 days ago + 1 day
+          lt: sevenDaysAgo, // strictly older than 7 days
         },
       },
     });
